@@ -221,7 +221,10 @@ def ECE569_TransInv(T):
     """
     R, p = ECE569_TransToRp(T)
     Rt = np.array(R).T
-    # return (inverse of T using formula from class)
+    return np.block([
+                    [Rt, (-Rt @ p).reshape(3, 1)], 
+                     [np.array([[0, 0, 0, 1]])]
+                     ])
 
 def ECE569_VecTose3(V):
     """Converts a spatial velocity vector into a 4x4 matrix in se3
@@ -500,17 +503,13 @@ def ECE569_IKinBody(Blist, M, T, thetalist0, eomg, ev):
     thetalist = np.array(thetalist0).copy()
     i = 0
     maxiterations = 20
-    # TODO: calculate Vb
-    # Hint: use four of the ECE569 functions from earlier
-    # Vb = ...
+    Vb = ECE569_se3ToVec(ECE569_MatrixLog6(ECE569_TransInv(ECE569_FKinBody(M, Blist, thetalist)) @ T))
     err = np.linalg.norm([Vb[0], Vb[1], Vb[2]]) > eomg \
           or np.linalg.norm([Vb[3], Vb[4], Vb[5]]) > ev
     while err and i < maxiterations:
-        # TODO: update thetalist
-        # Hint: pseudinverse is given by np.linalg.pinv
-        # thetalist = thetalist + ...
+        thetalist = thetalist + np.linalg.pinv(ECE569_JacobianBody(Blist, thetalist)) @ Vb
         i += 1
-        # Vb = ...
+        Vb = ECE569_se3ToVec(ECE569_MatrixLog6(ECE569_TransInv(ECE569_FKinBody(M, Blist, thetalist)) @ T))
         err = np.linalg.norm([Vb[0], Vb[1], Vb[2]]) > eomg \
               or np.linalg.norm([Vb[3], Vb[4], Vb[5]]) > ev
     return (thetalist, not err)
@@ -534,7 +533,6 @@ def main():
 
     ### Step 1: Trajectory Generation
 
-    # TODO: replace T, xd, yd with your our lissajous curve
     T = 2*np.pi
     t = np.linspace(0, T, 100)
     xd = 0.15*np.sin(3*t)
@@ -545,11 +543,9 @@ def main():
     for i in range(1, len(t)):
         d += np.sqrt((xd[i] - xd[i-1])**2 + (yd[i] - yd[i-1])**2)
     
-    # TODO: replace tfinal with your code
     tfinal = 15
     # calculate average velocity
     c = d/tfinal
-    print(c)
 
     # forward euler to calculate alpha
     dt = 0.002
@@ -571,7 +567,6 @@ def main():
     plt.grid()
     plt.show()
 
-    # TODO: repalce with your own lissaous curve
     # rescale our trajectory with alpha
     x = 0.15*np.sin(3*alpha)
     y = 0.1*np.sin(4*alpha)
@@ -624,7 +619,6 @@ def main():
     theta0 = np.deg2rad(np.array([-51.0, -85.09, -125.84, -149.22, -51.0, 0.0]))
 
     # perform forward kinematics using ECE569_FKinSpace and ECE569_FKinBody
-    # TODO: implement these functions
     T0_space = ECE569_FKinSpace(M, S, theta0)
     print(f'T0_space: {T0_space}')
     T0_body = ECE569_FKinBody(M, B, theta0)
@@ -657,91 +651,85 @@ def main():
     ax.legend()
     plt.show()
 
-    # ### Step 3: Inverse Kinematics
+    ### Step 3: Inverse Kinematics
 
-    # # when i=0
-    # thetaAll = np.zeros((6, len(t)))
+    # when i=0
+    thetaAll = np.zeros((6, len(t)))
 
-    # initialguess = theta0
-    # eomg = 1e-6
-    # ev = 1e-6
+    initialguess = theta0
+    eomg = 1e-6
+    ev = 1e-6
 
-    # # TODO: implement the ECE569_IKinBody function
-    # thetaSol, success = ECE569_IKinBody(B, M, Tsd[:,:,0], initialguess, eomg, ev)
-    # if not success:
-    #     raise Exception(f'Failed to find a solution at index {0}')
-    # thetaAll[:, 0] = thetaSol
+    thetaSol, success = ECE569_IKinBody(B, M, Tsd[:,:,0], initialguess, eomg, ev)
+    if not success:
+        raise Exception(f'Failed to find a solution at index {0}')
+    thetaAll[:, 0] = thetaSol
 
-    # # when i=1...,N-1
-    # for i in range(1, len(t)):
-    #     # TODO: use previous solution as current guess
-    #     # initialguess = ...
+    # when i=1...,N-1
+    for i in range(1, len(t)):
+        initialguess = thetaSol
 
-    #     # TODO: calculate thetaSol for Tsd[:,:,i] with initial guess
-    #     # thetaSol, success = ...
-    #     if not success:
-    #         raise Exception(f'Failed to find a solution at index {i}')
-    #     thetaAll[:, i] = thetaSol
+        thetaSol, success = ECE569_IKinBody(B, M, Tsd[:,:,i], initialguess, eomg, ev)
+        if not success:
+            raise Exception(f'Failed to find a solution at index {i}')
+        thetaAll[:, i] = thetaSol
 
-    # # verify that the joint angles don't change much
-    # dj = np.diff(thetaAll, axis=1)
-    # plt.plot(t[1:], dj[0], 'b-',label='joint 1')
-    # plt.plot(t[1:], dj[1], 'g-',label='joint 2')
-    # plt.plot(t[1:], dj[2], 'r-',label='joint 3')
-    # plt.plot(t[1:], dj[3], 'c-',label='joint 4')
-    # plt.plot(t[1:], dj[4], 'm-',label='joint 5')
-    # plt.plot(t[1:], dj[5], 'y-',label='joint 6')
-    # plt.xlabel('t (seconds)')
-    # plt.ylabel('first order difference')
-    # plt.title('Joint angles first order difference')
-    # plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
-    # plt.grid()
-    # plt.tight_layout()
-    # plt.show()
+    # verify that the joint angles don't change much
+    dj = np.diff(thetaAll, axis=1)
+    plt.plot(t[1:], dj[0], 'b-',label='joint 1')
+    plt.plot(t[1:], dj[1], 'g-',label='joint 2')
+    plt.plot(t[1:], dj[2], 'r-',label='joint 3')
+    plt.plot(t[1:], dj[3], 'c-',label='joint 4')
+    plt.plot(t[1:], dj[4], 'm-',label='joint 5')
+    plt.plot(t[1:], dj[5], 'y-',label='joint 6')
+    plt.xlabel('t (seconds)')
+    plt.ylabel('first order difference')
+    plt.title('Joint angles first order difference')
+    plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
-    # # verify that the joint angles will trace out our trajectory
-    # actual_Tsd = np.zeros((4, 4, len(t)))
-    # for i in range(len(t)):
-    #     # TODO: use forward kinematics to calculate Tsd from our thetaAll
-    #     # actual_Tsd[:,:,i] = ...
+    # verify that the joint angles will trace out our trajectory
+    actual_Tsd = np.zeros((4, 4, len(t)))
+    for i in range(len(t)):
+        actual_Tsd[:,:,i] = ECE569_FKinBody(M, B, thetaAll[:, i])
     
-    # xs = actual_Tsd[0, 3, :]
-    # ys = actual_Tsd[1, 3, :]
-    # zs = actual_Tsd[2, 3, :]
-    # ax = plt.figure().add_subplot(projection='3d')
-    # ax.plot(xs, ys, zs, 'b-',label='p(t)')
-    # ax.plot(xs[0], ys[0], zs[0], 'go',label='start')
-    # ax.plot(xs[-1], ys[-1], zs[-1], 'rx',label='end')
-    # ax.set_aspect('equal')
-    # ax.set_xlabel('x (m)')
-    # ax.set_ylabel('y (m)')
-    # ax.set_zlabel('z (m)')
-    # ax.set_title('Verified Trajectory in s frame')
-    # ax.legend()
-    # plt.show()
+    xs = actual_Tsd[0, 3, :]
+    ys = actual_Tsd[1, 3, :]
+    zs = actual_Tsd[2, 3, :]
+    ax = plt.figure().add_subplot(projection='3d')
+    ax.plot(xs, ys, zs, 'b-',label='p(t)')
+    ax.plot(xs[0], ys[0], zs[0], 'go',label='start')
+    ax.plot(xs[-1], ys[-1], zs[-1], 'rx',label='end')
+    ax.set_aspect('equal')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_title('Verified Trajectory in s frame')
+    ax.legend()
+    plt.show()
     
-    # # (3e) verify the robot does not enter kinematic singularity
-    # # by plotting the mu3 manipulability measure
-    # mu3s = np.zeros(len(t))
-    # # for i in range(len(t)):
-    #     # TODO: fill in this code
-    #     # Jb = ECE569_JacobianBody(...)          # get the body jacobain for thetaAll[:, i]
-    #     # Jv = ...                               # get the last three rows of Jb
-    #     # mu3s[i] = np.sqrt(np.linalg.det(...))  # compute mu3 = sqrt(det(Jv Jv^T)) using numpy
-    # plt.plot(t, mu3s, '-')
-    # plt.xlabel('t (seconds)')
-    # plt.ylabel(r'$\mu_3 = \sqrt{det(J_v J_v^\top)}$')
-    # plt.title('Manipulability')
-    # plt.grid()
-    # plt.tight_layout()
-    # plt.show()
+    # (3e) verify the robot does not enter kinematic singularity
+    # by plotting the mu3 manipulability measure
+    mu3s = np.zeros(len(t))
+    for i in range(len(t)):
+        Jb = ECE569_JacobianBody(B, thetaAll[:, i])          # get the body jacobain for thetaAll[:, i]
+        Jv = Jb[3:, :]                               # get the last three rows of Jb
+        mu3s[i] = np.sqrt(np.linalg.det(Jv @ Jv.T))  # compute mu3 = sqrt(det(Jv Jv^T)) using numpy
+    plt.plot(t, mu3s, '-')
+    plt.xlabel('t (seconds)')
+    plt.ylabel(r'$\mu_3 = \sqrt{det(J_v J_v^\top)}$')
+    plt.title('Manipulability')
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
-    # # save to csv file (you can modify the led column to control the led)
-    # # led = 1 means the led is on, led = 0 means the led is off
-    # led = np.ones_like(t)
-    # data = np.column_stack((t, thetaAll.T, led))
-    # # TODO: replace the csv filename with your own
-    # np.savetxt('ldihel.csv', data, delimiter=',')
+    # save to csv file (you can modify the led column to control the led)
+    # led = 1 means the led is on, led = 0 means the led is off
+    led = np.ones_like(t)
+    data = np.column_stack((t, thetaAll.T, led))
+    np.savetxt('nguye800.csv', data, delimiter=',')
 
 
 if __name__ == "__main__":
