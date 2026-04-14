@@ -681,7 +681,7 @@ def main():
     s = np.concatenate(([0.0], np.cumsum(seg_len)))
     total_len = s[-1]
 
-    tfinal = 25
+    tfinal = 20
     c = total_len / tfinal
 
     dt = 0.002
@@ -693,6 +693,16 @@ def main():
     for i in range(1, len(t)):
         u[i] = u[i-1] + (g(t[i], tfinal, ta) / tfinal) * dt
     u = np.clip(u, 0.0, 1.0)
+
+    # plot normalized path progress vs time
+    plt.plot(t, u, 'b-', label='u')
+    plt.plot(t, np.ones(len(t)), 'k--', label='path complete')
+    plt.xlabel('t')
+    plt.ylabel('u')
+    plt.title('u vs t')
+    plt.legend()
+    plt.grid()
+    plt.show()
 
     # resample the smiley path onto the final time grid
     s_des = u * total_len
@@ -706,6 +716,17 @@ def main():
     xdot = np.diff(x) / dt
     ydot = np.diff(y) / dt
     v = np.sqrt(xdot**2 + ydot**2)
+
+    # plot velocity vs t
+    plt.plot(t[1:], v, 'b-', label='velocity')
+    plt.plot(t[1:], np.ones(len(t[1:])) * c, 'k--', label='average velocity')
+    plt.plot(t[1:], np.ones(len(t[1:])) * 0.25, 'r--', label='velocity limit')
+    plt.xlabel('t')
+    plt.ylabel('velocity')
+    plt.title('velocity vs t')
+    plt.legend()
+    plt.grid()
+    plt.show()
 
     ### Step 2: Forward Kinematics
     L1 = 0.2435
@@ -796,6 +817,19 @@ def main():
 
     # verify that the joint angles don't change much
     dj = np.diff(thetaAll, axis=1)
+    plt.plot(t[1:], dj[0], 'b-',label='joint 1')
+    plt.plot(t[1:], dj[1], 'g-',label='joint 2')
+    plt.plot(t[1:], dj[2], 'r-',label='joint 3')
+    plt.plot(t[1:], dj[3], 'c-',label='joint 4')
+    plt.plot(t[1:], dj[4], 'm-',label='joint 5')
+    plt.plot(t[1:], dj[5], 'y-',label='joint 6')
+    plt.xlabel('t (seconds)')
+    plt.ylabel('first order difference')
+    plt.title('Joint angles first order difference')
+    plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
     # verify that the joint angles will trace out our trajectory
     actual_Tsd = np.zeros((4, 4, len(t)))
@@ -805,6 +839,17 @@ def main():
     xs = actual_Tsd[0, 3, :]
     ys = actual_Tsd[1, 3, :]
     zs = actual_Tsd[2, 3, :]
+    ax = plt.figure().add_subplot(projection='3d')
+    ax.plot(xs, ys, zs, 'b-',label='p(t)')
+    ax.plot(xs[0], ys[0], zs[0], 'go',label='start')
+    ax.plot(xs[-1], ys[-1], zs[-1], 'rx',label='end')
+    ax.set_aspect('equal')
+    ax.set_xlabel('x (m)')
+    ax.set_ylabel('y (m)')
+    ax.set_zlabel('z (m)')
+    ax.set_title('Verified Trajectory in s frame')
+    ax.legend()
+    plt.show()
     
     # (3e) verify the robot does not enter kinematic singularity
     # by plotting the mu3 manipulability measure
@@ -813,6 +858,13 @@ def main():
         Jb = ECE569_JacobianBody(B, thetaAll[:, i])          # get the body jacobain for thetaAll[:, i]
         Jv = Jb[3:, :]                               # get the last three rows of Jb
         mu3s[i] = np.sqrt(np.linalg.det(Jv @ Jv.T))  # compute mu3 = sqrt(det(Jv Jv^T)) using numpy
+    plt.plot(t, mu3s, '-')
+    plt.xlabel('t (seconds)')
+    plt.ylabel(r'$\mu_3 = \sqrt{det(J_v J_v^\top)}$')
+    plt.title('Manipulability')
+    plt.grid()
+    plt.tight_layout()
+    plt.show()
 
     # save to csv file (you can modify the led column to control the led)
     # led = 1 means the led is on, led = 0 means the led is off
